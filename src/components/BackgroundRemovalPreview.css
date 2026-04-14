@@ -1,0 +1,160 @@
+.bg-removal-preview {
+  background: #1e1e2e;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #333;
+}
+
+.bg-removal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.bg-removal-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.processing-info {
+  font-size: 11px;
+  color: #8b5cf6;
+}
+
+.bg-removal-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #333;
+}
+
+.tier-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tier-selector label {
+  font-size: 12px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.tier-selector select {
+  flex: 1;
+  background: #2a2a3e;
+  border: 1px solid #444;
+  color: #ddd;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.bg-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bg-control label {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.bg-control input[type="range"] {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #333;
+  border-radius: 2px;
+  outline: none;
+}
+
+.bg-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  cursor: pointer;
+}
+
+.reprocess-btn {
+  padding: 6px 12px;
+  background: #8b5cf6;
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.reprocess-btn:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+.reprocess-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comparison-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comparison-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.comparison-toggle button {
+  flex: 1;
+  padding: 4px 8px;
+  background: #2a2a3e;
+  border: 1px solid #444;
+  color: #aaa;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.comparison-toggle button.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+
+.comparison-image {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.checkerboard-bg {
+  background-image: 
+    linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-color: #222;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100px;
+}
+
+.checkerboard-bg img {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}

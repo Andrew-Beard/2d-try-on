@@ -1,0 +1,133 @@
+.control-panel {
+  background: #1e1e2e;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #333;
+}
+
+.control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #333;
+}
+
+.control-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #e0e0e0;
+  font-weight: 600;
+}
+
+.reset-btn {
+  background: none;
+  border: 1px solid #555;
+  color: #aaa;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.reset-btn:hover {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+.control-group {
+  margin-bottom: 14px;
+}
+
+.control-group label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #bbb;
+  margin-bottom: 6px;
+}
+
+.control-group .value {
+  color: #8b5cf6;
+  font-weight: 600;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.control-group input[type="range"] {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #333;
+  border-radius: 3px;
+  outline: none;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  cursor: pointer;
+  border: 2px solid #1e1e2e;
+}
+
+.control-group input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  cursor: pointer;
+  border: 2px solid #1e1e2e;
+}
+
+.finger-selector {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.finger-btn {
+  flex: 1;
+  min-width: 60px;
+  padding: 6px 4px;
+  border: 1px solid #444;
+  background: #2a2a3e;
+  color: #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.finger-btn:hover {
+  border-color: #8b5cf6;
+  background: #333;
+}
+
+.finger-btn.active {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+}
+
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  justify-content: flex-start !important;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: #8b5cf6;
+  width: 16px;
+  height: 16px;
+}

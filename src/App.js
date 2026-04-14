@@ -48,7 +48,7 @@ function App() {
           <h1>💍 Ring Virtual Try-On</h1>
         </div>
         <p className="header-subtitle">
-          Upload a ring image → auto background removal → live hand tracking overlay
+          Capture a ring image → auto background removal → live hand tracking overlay
         </p>
       </header>
 
@@ -64,7 +64,7 @@ function App() {
           <div className="instructions">
             <div className="step">
               <span className="step-num">1</span>
-              <span>Upload or pick a ring image below</span>
+              <span>Capture or pick a ring image below</span>
             </div>
             <div className="step">
               <span className="step-num">2</span>
@@ -83,9 +83,9 @@ function App() {
 
         {/* Sidebar */}
         <aside className="sidebar">
-          {/* Upload Section */}
+          {/* Capture Section */}
           <div className="sidebar-section">
-            <h3 className="section-title">Upload Ring Image</h3>
+            <h3 className="section-title">Capture Ring Image</h3>
             <RingUploader 
               onImageSelected={handleImageSelected}
               currentImage={originalRingImage}

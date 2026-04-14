@@ -30,15 +30,28 @@ export default function TryOnCanvas({ ringImage, controls }) {
 
   const startWebcam = useCallback(async () => {
     try {
+      // Check browser support — mediaDevices requires HTTPS on mobile
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatusMessage('Camera not available. Please use HTTPS or localhost.');
+        return;
+      }
+
       setStatusMessage('Starting camera...');
       
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user',
-        },
-      });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+          },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+      }
 
       const video = videoRef.current;
       video.srcObject = stream;

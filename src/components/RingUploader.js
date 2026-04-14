@@ -1,75 +1,221 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import './RingUploader.css';
 
 /**
- * Ring image upload component with drag-and-drop support
+ * Ring image capture component — opens a camera to photograph the ring
+ * with a semi-transparent overlay guide for alignment.
  */
 export default function RingUploader({ onImageSelected, currentImage }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [countdown, setCountdown] = useState(null);
 
-  const handleFile = useCallback((file) => {
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => onImageSelected(img, file.name);
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+  // Clean up camera on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setCameraError('');
+    setCameraReady(false);
+
+    // Check browser support — mediaDevices requires HTTPS on mobile
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError('Camera not available. Please use HTTPS or localhost.');
+      return;
     }
-  }, [onImageSelected]);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    handleFile(file);
-  }, [handleFile]);
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
+    // Show the viewfinder UI first so the <video> element is in the DOM
+    setIsCameraOpen(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
-    setIsDragging(false);
+  // Once the viewfinder UI is shown (and the video element exists), attach the stream
+  useEffect(() => {
+    if (!isCameraOpen) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          });
+        } catch {
+          // Fallback: any available camera
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+        }
+
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            if (!cancelled) {
+              video.play().then(() => {
+                setCameraReady(true);
+              }).catch(() => {});
+            }
+          };
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Camera error:', err);
+          setCameraError(err.message || 'Could not access camera');
+          setIsCameraOpen(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isCameraOpen]);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+    setCameraReady(false);
+    setCountdown(null);
   }, []);
 
-  const handleInputChange = useCallback((e) => {
-    const file = e.target.files[0];
-    handleFile(file);
-  }, [handleFile]);
+  const capturePhoto = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Convert to image
+    const dataUrl = canvas.toDataURL('image/png');
+    const img = new Image();
+    img.onload = () => {
+      onImageSelected(img, 'Captured Ring');
+      stopCamera();
+    };
+    img.src = dataUrl;
+  }, [onImageSelected, stopCamera]);
+
+  const handleCaptureClick = useCallback(() => {
+    // 3-second countdown before capture
+    setCountdown(3);
+    let count = 3;
+    const interval = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(interval);
+        setCountdown(null);
+        capturePhoto();
+      } else {
+        setCountdown(count);
+      }
+    }, 1000);
+  }, [capturePhoto]);
 
   return (
     <div className="ring-uploader">
-      <div
-        className={`drop-zone ${isDragging ? 'dragging' : ''} ${currentImage ? 'has-image' : ''}`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        {currentImage ? (
-          <div className="preview-container">
-            <img src={currentImage.src} alt="Ring preview" className="ring-preview" />
-            <div className="overlay-text">Click or drop to replace</div>
+      {/* Hidden canvas for capture */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+      {!isCameraOpen ? (
+        <>
+          {/* Show captured preview or prompt to open camera */}
+          {currentImage ? (
+            <div className="captured-preview">
+              <img src={currentImage.src} alt="Captured ring" className="ring-preview-img" />
+              <div className="captured-actions">
+                <button className="retake-btn" onClick={startCamera}>
+                  📷 Retake
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="open-camera-btn" onClick={startCamera}>
+              <span className="cam-icon">📷</span>
+              <span className="cam-label">Capture Ring Image</span>
+              <span className="cam-hint">Open camera to photograph your ring</span>
+            </button>
+          )}
+
+          {cameraError && (
+            <div className="camera-error">⚠ {cameraError}</div>
+          )}
+        </>
+      ) : (
+        /* Camera viewfinder */
+        <div className="camera-viewfinder">
+          {/* Video element — always present when viewfinder is open */}
+          <video ref={videoRef} playsInline autoPlay muted className="camera-feed" />
+
+          {/* Loading spinner while camera initializes */}
+          {!cameraReady && (
+            <div className="camera-loading">
+              <span className="loading-spinner">⏳</span>
+              <span>Starting camera...</span>
+            </div>
+          )}
+
+          {/* Ring overlay guide at 60% opacity */}
+          <img
+            src="/rings/ring-overlay.png"
+            alt=""
+            className="ring-guide-overlay"
+          />
+
+          {/* Countdown overlay */}
+          {countdown !== null && (
+            <div className="countdown-overlay">
+              <span className="countdown-number">{countdown}</span>
+            </div>
+          )}
+
+          {/* Camera controls */}
+          <div className="viewfinder-controls">
+            <button className="vf-btn cancel" onClick={stopCamera}>
+              ✕ Cancel
+            </button>
+            <button
+              className="vf-btn capture"
+              onClick={handleCaptureClick}
+              disabled={countdown !== null || !cameraReady}
+            >
+              {countdown !== null ? `${countdown}...` : '◉ Capture'}
+            </button>
           </div>
-        ) : (
-          <div className="upload-prompt">
-            <div className="upload-icon">💍</div>
-            <p>Drop ring image here</p>
-            <p className="sub-text">or click to browse</p>
-          </div>
-        )}
-      </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleInputChange}
-        style={{ display: 'none' }}
-      />
+
+          <p className="guide-hint">Align your ring with the overlay guide</p>
+        </div>
+      )}
     </div>
   );
 }

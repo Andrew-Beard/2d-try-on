@@ -135,7 +135,52 @@ function tier1WhiteKeying(canvas, tolerance = 40, featherRadius = 1.5) {
     }
   }
 
-  // Apply alpha based on flood-filled background mask
+  // Second pass: detect interior white/bg-colored regions (e.g. hole inside a ring)
+  // Find all unvisited pixels that look like background (low alpha mask) but weren't
+  // reached by the border flood fill. These are enclosed bg pockets.
+  for (let i = 0; i < alphaMask.length; i++) {
+    if (!visited[i] && alphaMask[i] < 0.3) {
+      // This is a bg-colored pixel not connected to the border — could be an interior hole.
+      // Flood-fill this region to measure it and mark it as background too.
+      const pocket = [];
+      const pocketQueue = [i];
+      visited[i] = 1;
+      let pocketIsForeground = false;
+
+      while (pocketQueue.length > 0) {
+        const pIdx = pocketQueue.shift();
+        pocket.push(pIdx);
+        const px = pIdx % width;
+        const py = Math.floor(pIdx / width);
+
+        const pNeighbors = [
+          py > 0 ? pIdx - width : -1,
+          py < height - 1 ? pIdx + width : -1,
+          px > 0 ? pIdx - 1 : -1,
+          px < width - 1 ? pIdx + 1 : -1,
+        ];
+
+        for (const nIdx of pNeighbors) {
+          if (nIdx >= 0 && !visited[nIdx] && alphaMask[nIdx] < 0.7) {
+            visited[nIdx] = 1;
+            pocketQueue.push(nIdx);
+          }
+        }
+      }
+
+      // If the pocket is a reasonable size (not the entire image), mark as background.
+      // Very tiny pockets (< 4px) are noise — skip them.
+      // Very large pockets (> 50% of image) are probably not interior holes — skip.
+      const totalPixels = width * height;
+      if (pocket.length >= 4 && pocket.length < totalPixels * 0.5) {
+        for (const pIdx of pocket) {
+          isBackground[pIdx] = 1;
+        }
+      }
+    }
+  }
+
+  // Apply alpha based on flood-filled background mask (border + interior pockets)
   for (let i = 0; i < alphaMask.length; i++) {
     if (isBackground[i]) {
       // Use the smooth alpha from color distance

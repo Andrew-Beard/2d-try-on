@@ -1,10 +1,11 @@
 /**
- * Hand Tracking Module using MediaPipe Hands
+ * Hand Tracking Module using @mediapipe/tasks-vision (HandLandmarker)
  * 
- * Provides finger landmark detection for ring placement
+ * Provides finger landmark detection for ring placement.
+ * Uses the newer tasks-vision API which is more reliable than the legacy @mediapipe/hands.
  */
 
-import { Hands } from '@mediapipe/hands';
+import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
 // MediaPipe hand landmark indices
 // Each finger has 4 landmarks: MCP (base), PIP, DIP, TIP
@@ -45,7 +46,7 @@ export function getRingPosition(landmarks, fingerName = 'ring') {
   const fingerLength = Math.sqrt(
     (dip.x - pip.x) ** 2 + (dip.y - pip.y) ** 2
   );
-  const fingerWidth = fingerLength * 0.8; // approximate width relative to segment length
+  const fingerWidth = fingerLength * 0.8;
 
   return {
     x: ringX,
@@ -60,52 +61,69 @@ export function getRingPosition(landmarks, fingerName = 'ring') {
 }
 
 /**
- * Initialize and return a MediaPipe Hands instance
+ * Create and initialize a HandLandmarker instance.
+ * Returns a promise that resolves to the ready-to-use detector.
  */
-export function createHandTracker(onResults) {
-  const hands = new Hands({
-    locateFile: (file) => {
-      return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-    },
-  });
+let _handLandmarkerPromise = null;
 
-  hands.setOptions({
-    maxNumHands: 2,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.5,
-  });
+export async function createHandLandmarker() {
+  // Singleton — reuse if already created
+  if (_handLandmarkerPromise) return _handLandmarkerPromise;
 
-  hands.onResults(onResults);
+  _handLandmarkerPromise = (async () => {
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm'
+    );
 
-  return hands;
+    const handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'GPU',
+      },
+      runningMode: 'VIDEO',
+      numHands: 2,
+      minHandDetectionConfidence: 0.5,
+      minHandPresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+
+    console.log('HandLandmarker model loaded');
+    return handLandmarker;
+  })();
+
+  return _handLandmarkerPromise;
 }
 
 /**
- * Process a single image through hand detection
- * @param {Hands} hands - MediaPipe Hands instance 
- * @param {HTMLImageElement|HTMLCanvasElement} image 
- * @returns {Promise<Object>} detection results
+ * Detect hands in a video frame.
+ * Must be called with increasing timestamps (use performance.now()).
+ * 
+ * @param {HandLandmarker} handLandmarker
+ * @param {HTMLVideoElement} video
+ * @param {number} timestamp - monotonically increasing ms timestamp
+ * @returns {{ landmarks: Array|null, handedness: Array|null }}
  */
-export async function detectHandsInImage(hands, image) {
-  return new Promise((resolve) => {
-    let resolved = false;
-    
-    hands.onResults((results) => {
-      if (!resolved) {
-        resolved = true;
-        resolve(results);
-      }
-    });
+export function detectForVideo(handLandmarker, video, timestamp) {
+  try {
+    const results = handLandmarker.detectForVideo(video, timestamp);
+    if (results.landmarks && results.landmarks.length > 0) {
+      return {
+        landmarks: results.landmarks[0],
+        handedness: results.handedness?.[0] || null,
+      };
+    }
+  } catch (e) {
+    // Frame detection error — skip
+  }
+  return { landmarks: null, handedness: null };
+}
 
-    hands.send({ image }).catch((err) => {
-      console.error('Hand detection error:', err);
-      if (!resolved) {
-        resolved = true;
-        resolve({ multiHandLandmarks: [], multiHandedness: [] });
-      }
-    });
-  });
+/**
+ * Reset the singleton so a new HandLandmarker can be created
+ */
+export function resetHandLandmarker() {
+  _handLandmarkerPromise = null;
 }
 
 /**
@@ -148,13 +166,4 @@ export function drawHandLandmarks(ctx, landmarks, width, height, options = {}) {
   }
 
   ctx.restore();
-}
-
-/**
- * Determine hand type (left/right) from handedness data
- */
-export function getHandType(handedness) {
-  if (!handedness || handedness.length === 0) return 'unknown';
-  // MediaPipe reports the classification label
-  return handedness[0]?.label?.toLowerCase() || 'unknown';
 }

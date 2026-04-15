@@ -145,7 +145,6 @@ function tier1WhiteKeying(canvas, tolerance = 40, featherRadius = 1.5) {
       const pocket = [];
       const pocketQueue = [i];
       visited[i] = 1;
-      let pocketIsForeground = false;
 
       while (pocketQueue.length > 0) {
         const pIdx = pocketQueue.shift();

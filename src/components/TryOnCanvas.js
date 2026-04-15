@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { createHandTracker, getRingPosition, drawHandLandmarks } from '../utils/handTracking';
+import { createHandLandmarker, detectForVideo, resetHandLandmarker, getRingPosition, drawHandLandmarks } from '../utils/handTracking';
 import { drawRingOverlay } from '../utils/ringOverlay';
 import './TryOnCanvas.css';
 
@@ -10,7 +10,7 @@ export default function TryOnCanvas({ ringImage, controls }) {
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const handsRef = useRef(null);
-  const animFrameRef = useRef(null);
+  const runningRef = useRef(false);
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [handDetected, setHandDetected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Click "Start Camera" to begin');
@@ -55,39 +55,43 @@ export default function TryOnCanvas({ ringImage, controls }) {
 
       const video = videoRef.current;
       video.srcObject = stream;
+
+      // Wait for video metadata then play
+      await new Promise((resolve) => {
+        video.onloadedmetadata = resolve;
+      });
       await video.play();
 
       setStatusMessage('Loading hand detection model...');
       
-      // Initialize MediaPipe Hands
-      const hands = createHandTracker((results) => {
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-          landmarksRef.current = results.multiHandLandmarks[0];
-          setHandDetected(true);
-        } else {
-          landmarksRef.current = null;
-          setHandDetected(false);
-        }
-      });
+      // Initialize HandLandmarker (tasks-vision API)
+      const handLandmarker = await createHandLandmarker();
+      handsRef.current = handLandmarker;
 
-      handsRef.current = hands;
       setIsWebcamActive(true);
       setStatusMessage('Show your hand to the camera');
 
-      // Start detection loop
-      const detectLoop = async () => {
-        if (video.readyState >= 2 && handsRef.current) {
-          try {
-            await handsRef.current.send({ image: video });
-          } catch (e) {
-            // Silently handle frame send errors
+      // Start detection loop — synchronous detectForVideo per frame
+      runningRef.current = true;
+      const detectLoop = () => {
+        if (!runningRef.current || !handsRef.current) return;
+
+        if (video.readyState >= 2) {
+          const { landmarks } = detectForVideo(handsRef.current, video, performance.now());
+          if (landmarks) {
+            landmarksRef.current = landmarks;
+            setHandDetected(true);
+          } else {
+            landmarksRef.current = null;
+            setHandDetected(false);
           }
         }
-        animFrameRef.current = requestAnimationFrame(detectLoop);
+
+        // ~30 fps detection throttle
+        setTimeout(() => requestAnimationFrame(detectLoop), 33);
       };
-      
-      // Small delay to let model load
-      setTimeout(() => detectLoop(), 500);
+
+      requestAnimationFrame(detectLoop);
       
     } catch (err) {
       console.error('Webcam error:', err);
@@ -96,9 +100,8 @@ export default function TryOnCanvas({ ringImage, controls }) {
   }, []);
 
   const stopWebcam = useCallback(() => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-    }
+    runningRef.current = false;
+
     if (videoRef.current?.srcObject) {
       videoRef.current.srcObject.getTracks().forEach(t => t.stop());
       videoRef.current.srcObject = null;
@@ -106,6 +109,7 @@ export default function TryOnCanvas({ ringImage, controls }) {
     if (handsRef.current) {
       handsRef.current.close();
       handsRef.current = null;
+      resetHandLandmarker();
     }
     landmarksRef.current = null;
     setIsWebcamActive(false);
@@ -200,7 +204,7 @@ export default function TryOnCanvas({ ringImage, controls }) {
     <div className="tryon-canvas-container">
       <div className="canvas-wrapper">
         <canvas ref={canvasRef} className="tryon-canvas" />
-        <video ref={videoRef} style={{ display: 'none' }} playsInline />
+        <video ref={videoRef} style={{ display: 'none' }} playsInline autoPlay muted />
         
         {/* Status overlay */}
         <div className="status-bar">

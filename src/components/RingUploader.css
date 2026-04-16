@@ -109,6 +109,98 @@
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
 }
 
+/* Ring guide circle border — shows alignment state */
+.ring-guide-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 55%;
+  max-width: 240px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  z-index: 2;
+}
+
+.ring-guide-circle.guide-aligned {
+  border-color: #34d399;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.35);
+}
+
+.ring-guide-circle.guide-misaligned {
+  border-color: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+}
+
+/* Detected ring outline — follows detected position */
+.detected-ring-outline {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(139, 92, 246, 0.7);
+  pointer-events: none;
+  z-index: 3;
+  transition: border-color 0.2s;
+}
+
+.detected-ring-outline.outline-aligned {
+  border-color: #34d399;
+}
+
+.detected-ring-outline.outline-misaligned {
+  border-color: #f59e0b;
+  animation: pulse-outline 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-outline {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Alignment status banner */
+.alignment-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 10;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.3s, color 0.3s;
+  white-space: nowrap;
+}
+
+.banner-aligned {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+.banner-misaligned {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.alignment-icon {
+  font-size: 14px;
+}
+
+.alignment-text {
+  letter-spacing: 0.2px;
+}
+
 /* ─── Countdown ──────────────────────────────────── */
 
 .countdown-overlay {
@@ -178,15 +270,6 @@
 .vf-btn.capture:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.guide-hint {
-  text-align: center;
-  padding: 6px;
-  margin: 0;
-  font-size: 11px;
-  color: #888;
-  background: rgba(0, 0, 0, 0.3);
 }
 
 /* ─── Error ──────────────────────────────────────── */

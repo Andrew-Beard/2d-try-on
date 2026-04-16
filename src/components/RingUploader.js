@@ -1,22 +1,30 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { detectRing, checkAlignment } from '../utils/ringDetection';
 import './RingUploader.css';
+
+// Overlay guide is centered at (50%, 50%) and ~30% of frame width radius
+const GUIDE = { cx: 0.5, cy: 0.5, radius: 0.15 };
 
 /**
  * Ring image capture component — opens a camera to photograph the ring
  * with a semi-transparent overlay guide for alignment.
+ * Includes real-time ring detection to show alignment status.
  */
 export default function RingUploader({ onImageSelected, currentImage }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const detectLoopRef = useRef(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [countdown, setCountdown] = useState(null);
+  const [alignment, setAlignment] = useState(null); // { aligned, hint, detection }
 
   // Clean up camera on unmount
   useEffect(() => {
     return () => {
+      if (detectLoopRef.current) cancelAnimationFrame(detectLoopRef.current);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
@@ -93,7 +101,44 @@ export default function RingUploader({ onImageSelected, currentImage }) {
     };
   }, [isCameraOpen]);
 
+  // Real-time ring detection loop while camera is active
+  useEffect(() => {
+    if (!cameraReady || !isCameraOpen) {
+      setAlignment(null);
+      return;
+    }
+
+    let running = true;
+    const video = videoRef.current;
+
+    const loop = () => {
+      if (!running || !video || video.readyState < 2) {
+        detectLoopRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      const detection = detectRing(video);
+      const result = checkAlignment(detection, GUIDE);
+      setAlignment({ ...result, detection });
+
+      // Throttle to ~10 fps (detection is expensive)
+      setTimeout(() => {
+        if (running) detectLoopRef.current = requestAnimationFrame(loop);
+      }, 100);
+    };
+
+    detectLoopRef.current = requestAnimationFrame(loop);
+    return () => {
+      running = false;
+      if (detectLoopRef.current) cancelAnimationFrame(detectLoopRef.current);
+    };
+  }, [cameraReady, isCameraOpen]);
+
   const stopCamera = useCallback(() => {
+    if (detectLoopRef.current) {
+      cancelAnimationFrame(detectLoopRef.current);
+      detectLoopRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -104,6 +149,7 @@ export default function RingUploader({ onImageSelected, currentImage }) {
     setIsCameraOpen(false);
     setCameraReady(false);
     setCountdown(null);
+    setAlignment(null);
   }, []);
 
   const capturePhoto = useCallback(() => {
@@ -185,12 +231,36 @@ export default function RingUploader({ onImageSelected, currentImage }) {
             </div>
           )}
 
-          {/* Ring overlay guide at 60% opacity */}
+          {/* Ring overlay guide — colored by alignment */}
+          <div className={`ring-guide-circle ${alignment ? (alignment.aligned ? 'guide-aligned' : 'guide-misaligned') : ''}`} />
+
+          {/* Ring overlay image guide at 60% opacity */}
           <img
             src="/rings/ring-overlay.png"
             alt=""
             className="ring-guide-overlay"
           />
+
+          {/* Detected ring outline (when detected) */}
+          {alignment?.detection?.detected && (
+            <div
+              className={`detected-ring-outline ${alignment.aligned ? 'outline-aligned' : 'outline-misaligned'}`}
+              style={{
+                left: `${alignment.detection.cx * 100}%`,
+                top: `${alignment.detection.cy * 100}%`,
+                width: `${alignment.detection.radius * 200}%`,
+                height: `${alignment.detection.radius * 200}%`,
+              }}
+            />
+          )}
+
+          {/* Alignment status banner */}
+          {cameraReady && alignment && (
+            <div className={`alignment-banner ${alignment.aligned ? 'banner-aligned' : 'banner-misaligned'}`}>
+              <span className="alignment-icon">{alignment.aligned ? '✅' : '⚠️'}</span>
+              <span className="alignment-text">{alignment.hint}</span>
+            </div>
+          )}
 
           {/* Countdown overlay */}
           {countdown !== null && (
@@ -212,8 +282,6 @@ export default function RingUploader({ onImageSelected, currentImage }) {
               {countdown !== null ? `${countdown}...` : '◉ Capture'}
             </button>
           </div>
-
-          <p className="guide-hint">Align your ring with the overlay guide</p>
         </div>
       )}
     </div>

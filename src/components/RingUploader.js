@@ -206,11 +206,17 @@ export default function RingUploader({ onImageSelected, currentImage }) {
               </div>
             </div>
           ) : (
-            <button className="open-camera-btn" onClick={startCamera}>
-              <span className="cam-icon">📷</span>
-              <span className="cam-label">Capture Ring Image</span>
-              <span className="cam-hint">Open camera to photograph your ring</span>
-            </button>
+            <>
+              <button className="open-camera-btn" onClick={startCamera}>
+                <span className="cam-icon">📷</span>
+                <span className="cam-label">Capture Ring Image</span>
+                <span className="cam-hint">Open camera to photograph your ring</span>
+              </button>
+              <div className="bg-notice">
+                <span className="bg-notice-icon">💡</span>
+                <span>Place your ring on a <strong>white background</strong> for best results</span>
+              </div>
+            </>
           )}
 
           {cameraError && (
@@ -222,6 +228,11 @@ export default function RingUploader({ onImageSelected, currentImage }) {
         <div className="camera-viewfinder">
           {/* Video element — always present when viewfinder is open */}
           <video ref={videoRef} playsInline autoPlay muted className="camera-feed" />
+
+          {/* White background tip */}
+          <div className="bg-notice-floating">
+            💡 Use a <strong>white background</strong> for best results
+          </div>
 
           {/* Loading spinner while camera initializes */}
           {!cameraReady && (

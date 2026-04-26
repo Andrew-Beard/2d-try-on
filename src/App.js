@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import TryOnCanvas from './components/TryOnCanvas';
-import RingUploader from './components/RingUploader';
 import ExampleRings from './components/ExampleRings';
 import BackgroundRemovalPreview from './components/BackgroundRemovalPreview';
 import ControlPanel from './components/ControlPanel';
@@ -48,7 +47,7 @@ function App() {
           <h1>💍 Ring Virtual Try-On</h1>
         </div>
         <p className="header-subtitle">
-          Capture a ring image → auto background removal → live hand tracking overlay
+          Choose a ring image → auto background removal → live hand tracking overlay
         </p>
       </header>
 
@@ -64,7 +63,7 @@ function App() {
           <div className="instructions">
             <div className="step">
               <span className="step-num">1</span>
-              <span>Capture or pick a ring image below</span>
+              <span>Pick a ring image below</span>
             </div>
             <div className="step">
               <span className="step-num">2</span>
@@ -83,15 +82,6 @@ function App() {
 
         {/* Sidebar */}
         <aside className="sidebar">
-          {/* Capture Section */}
-          <div className="sidebar-section">
-            <h3 className="section-title">Capture Ring Image</h3>
-            <RingUploader 
-              onImageSelected={handleImageSelected}
-              currentImage={originalRingImage}
-            />
-          </div>
-
           {/* Example Rings */}
           <ExampleRings onSelect={handleImageSelected} />
 

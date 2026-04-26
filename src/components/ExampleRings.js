@@ -4,7 +4,7 @@ import './ExampleRings.css';
 const EXAMPLE_RINGS = [
   {
     id: 'white-bg',
-    src: '/rings/ring-white-bg.svg',
+    src: '/rings/ring-white-bg.png',
     label: 'White Background',
     description: 'Clean white bg - ideal for Tier 1',
     difficulty: 'easy',

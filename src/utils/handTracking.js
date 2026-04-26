@@ -19,6 +19,61 @@ export const FINGER_LANDMARKS = {
 
 export const FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky'];
 
+const FINGER_ADJACENT = {
+  thumb: ['index'],
+  index: ['middle'],
+  middle: ['index', 'ring'],
+  ring: ['middle', 'pinky'],
+  pinky: ['ring'],
+};
+
+function distance2D(a, b) {
+  if (!a || !b) return null;
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function estimateFingerWidth(landmarks, fingerName, finger) {
+  const pip = landmarks[finger.pip];
+  const dip = landmarks[finger.dip];
+  const mcp = landmarks[finger.mcp];
+
+  const candidates = [];
+
+  const segmentLength = distance2D(pip, dip);
+  if (segmentLength) {
+    candidates.push(segmentLength * 0.42);
+  }
+
+  const baseLength = distance2D(mcp, pip);
+  if (baseLength) {
+    candidates.push(baseLength * 0.38);
+  }
+
+  const adjacentFingers = FINGER_ADJACENT[fingerName] || [];
+  for (const adjacentName of adjacentFingers) {
+    const adjacentPipIndex = FINGER_LANDMARKS[adjacentName]?.pip;
+    const adjacentPip = adjacentPipIndex !== undefined ? landmarks[adjacentPipIndex] : null;
+    const centerDistance = distance2D(pip, adjacentPip);
+    if (centerDistance) {
+      candidates.push(centerDistance * 0.55);
+    }
+  }
+
+  const numericCandidates = candidates.filter((value) => Number.isFinite(value) && value > 0);
+  if (numericCandidates.length === 0) {
+    return 0.045;
+  }
+
+  numericCandidates.sort((a, b) => a - b);
+  const mid = Math.floor(numericCandidates.length / 2);
+  const rawWidth =
+    numericCandidates.length % 2 === 0
+      ? (numericCandidates[mid - 1] + numericCandidates[mid]) / 2
+      : numericCandidates[mid];
+
+  return Math.min(0.08, Math.max(0.02, rawWidth));
+}
+
 /**
  * Ring placement zone: between PIP and DIP joints (where rings are actually worn)
  */
@@ -42,11 +97,10 @@ export function getRingPosition(landmarks, fingerName = 'ring') {
   const dy = dip.y - pip.y;
   const angle = Math.atan2(dy, dx);
 
-  // Estimate finger width from MCP to PIP distance (rough approximation)
   const fingerLength = Math.sqrt(
     (dip.x - pip.x) ** 2 + (dip.y - pip.y) ** 2
   );
-  const fingerWidth = fingerLength * 0.8;
+  const fingerWidth = estimateFingerWidth(landmarks, fingerName, finger);
 
   return {
     x: ringX,

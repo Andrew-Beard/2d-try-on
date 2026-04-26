@@ -34,7 +34,7 @@ export function drawRingOverlay(ctx, ringImage, ringPosition, canvasWidth, canva
 
   // Base ring size from finger width
   const fingerWidthPx = ringPosition.fingerWidth * canvasWidth;
-  const baseSize = fingerWidthPx * 2.5; // ring should be wider than finger
+  const baseSize = fingerWidthPx * 1.65;
   const ringWidth = baseSize * scale;
   const ringHeight = (ringWidth / ringImage.width) * ringImage.height;
 

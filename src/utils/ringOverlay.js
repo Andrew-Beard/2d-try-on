@@ -7,6 +7,27 @@
 
 import { getRingPosition, drawHandLandmarks } from './handTracking';
 
+let reflectionCanvas = null;
+let reflectionCtx = null;
+
+function ensureReflectionCanvas(width, height) {
+  const safeWidth = Math.max(1, Math.ceil(width));
+  const safeHeight = Math.max(1, Math.ceil(height));
+
+  if (!reflectionCanvas) {
+    reflectionCanvas = document.createElement('canvas');
+    reflectionCtx = reflectionCanvas.getContext('2d');
+  }
+
+  if (reflectionCanvas.width !== safeWidth || reflectionCanvas.height !== safeHeight) {
+    reflectionCanvas.width = safeWidth;
+    reflectionCanvas.height = safeHeight;
+  }
+
+  reflectionCtx.clearRect(0, 0, reflectionCanvas.width, reflectionCanvas.height);
+  return { canvas: reflectionCanvas, ctx: reflectionCtx };
+}
+
 /**
  * Draw a ring image on the canvas at the detected finger position
  * 
@@ -64,6 +85,63 @@ export function drawRingOverlay(ctx, ringImage, ringPosition, canvasWidth, canva
     ringWidth,
     ringHeight
   );
+
+  // Realtime reflection layer (specular highlights clipped to ring alpha only)
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.002;
+  const shimmer = Math.sin(now + ringPosition.x * 8 + ringPosition.y * 6);
+  const reflectionStrength = Math.max(0.15, Math.min(0.9, 0.55 - (ringPosition.z || 0) * 0.8));
+  const sweepOffset = shimmer * ringWidth * 0.22;
+
+  const layer = ensureReflectionCanvas(ringWidth, ringHeight);
+  const layerCanvas = layer.canvas;
+  const layerCtx = layer.ctx;
+
+  const sweepGradient = layerCtx.createLinearGradient(
+    sweepOffset,
+    0,
+    layerCanvas.width + sweepOffset,
+    layerCanvas.height
+  );
+  sweepGradient.addColorStop(0.0, 'rgba(255, 255, 255, 0.00)');
+  sweepGradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.04)');
+  sweepGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.32)');
+  sweepGradient.addColorStop(0.65, 'rgba(255, 255, 255, 0.06)');
+  sweepGradient.addColorStop(1.0, 'rgba(255, 255, 255, 0.00)');
+
+  layerCtx.globalCompositeOperation = 'source-over';
+  layerCtx.globalAlpha = reflectionStrength;
+  layerCtx.fillStyle = sweepGradient;
+  layerCtx.fillRect(0, 0, layerCanvas.width, layerCanvas.height);
+
+  const hotspotX = layerCanvas.width * (0.35 + shimmer * 0.12);
+  const hotspotY = layerCanvas.height * 0.3;
+  const hotspot = layerCtx.createRadialGradient(
+    hotspotX,
+    hotspotY,
+    layerCanvas.width * 0.04,
+    hotspotX,
+    hotspotY,
+    layerCanvas.width * 0.38
+  );
+  hotspot.addColorStop(0.0, 'rgba(255, 255, 255, 0.26)');
+  hotspot.addColorStop(0.5, 'rgba(255, 255, 255, 0.08)');
+  hotspot.addColorStop(1.0, 'rgba(255, 255, 255, 0.00)');
+
+  layerCtx.globalAlpha = reflectionStrength * 0.8;
+  layerCtx.fillStyle = hotspot;
+  layerCtx.fillRect(0, 0, layerCanvas.width, layerCanvas.height);
+
+  // Mask reflection with ring alpha so highlights never appear on transparent background
+  layerCtx.globalCompositeOperation = 'destination-in';
+  layerCtx.globalAlpha = 1;
+  layerCtx.drawImage(ringImage, 0, 0, layerCanvas.width, layerCanvas.height);
+
+  // Composite masked reflection over ring
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = opacity;
+  ctx.drawImage(layerCanvas, -ringWidth / 2, -ringHeight / 2, ringWidth, ringHeight);
+  ctx.restore();
 
   ctx.restore();
 }

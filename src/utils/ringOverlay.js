@@ -43,7 +43,7 @@ export function drawRingOverlay(ctx, ringImage, ringPosition, canvasWidth, canva
 
   const {
     scale = 1.0,
-    rotation = 0,
+    rotation = -95,
     offsetX = 0,
     offsetY = 0,
     opacity = 1.0,

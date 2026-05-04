@@ -8,7 +8,7 @@ import './App.css';
 const DEFAULT_CONTROLS = {
   finger: 'ring',
   scale: 1.0,
-  rotation: 0,
+  rotation: -95,
   offsetX: 0,
   offsetY: 0,
   opacity: 1.0,

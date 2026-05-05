@@ -7,10 +7,11 @@ import './App.css';
 
 const DEFAULT_CONTROLS = {
   finger: 'ring',
-  scale: 1.0,
+  scale: 1.43,
   rotation: -95,
-  offsetX: 0,
-  offsetY: 0,
+  offsetXLeft: 13,
+  offsetXRight: -10,
+  offsetY: 55,
   opacity: 1.0,
   showLandmarks: false,
 };
@@ -21,6 +22,7 @@ function App() {
   const [ringName, setRingName] = useState('');
   const [controls, setControls] = useState({ ...DEFAULT_CONTROLS });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPalmClosed, setIsPalmClosed] = useState(false);
 
   const handleImageSelected = useCallback((img, name) => {
     setOriginalRingImage(img);
@@ -57,6 +59,7 @@ function App() {
           <TryOnCanvas 
             ringImage={activeRingImage} 
             controls={controls}
+            onPalmClosed={setIsPalmClosed}
           />
           
           {/* Instructions */}
@@ -108,6 +111,7 @@ function App() {
             controls={controls}
             onChange={setControls}
             onReset={handleReset}
+            isPalmClosed={isPalmClosed}
           />
         </aside>
       </div>

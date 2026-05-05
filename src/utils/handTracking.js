@@ -42,20 +42,29 @@ function estimateFingerWidth(landmarks, fingerName, finger) {
   const segmentLength = distance2D(pip, dip);
   if (segmentLength) {
     candidates.push(segmentLength * 0.42);
+    candidates.push(segmentLength * 0.42); // double weight for segment-based
   }
 
   const baseLength = distance2D(mcp, pip);
   if (baseLength) {
-    candidates.push(baseLength * 0.38);
+    candidates.push(baseLength * 0.36);
   }
 
   const adjacentFingers = FINGER_ADJACENT[fingerName] || [];
   for (const adjacentName of adjacentFingers) {
+    const adjacentMcpIndex = FINGER_LANDMARKS[adjacentName]?.mcp;
     const adjacentPipIndex = FINGER_LANDMARKS[adjacentName]?.pip;
+    const adjacentMcp = adjacentMcpIndex !== undefined ? landmarks[adjacentMcpIndex] : null;
     const adjacentPip = adjacentPipIndex !== undefined ? landmarks[adjacentPipIndex] : null;
-    const centerDistance = distance2D(pip, adjacentPip);
-    if (centerDistance) {
-      candidates.push(centerDistance * 0.55);
+    // MCP-to-MCP span is most reliable indicator of finger girth
+    const mcpSpan = distance2D(mcp, adjacentMcp);
+    if (mcpSpan) {
+      candidates.push(mcpSpan * 0.52);
+      candidates.push(mcpSpan * 0.52); // double weight — most stable
+    }
+    const pipSpan = distance2D(pip, adjacentPip);
+    if (pipSpan) {
+      candidates.push(pipSpan * 0.50);
     }
   }
 
@@ -87,10 +96,10 @@ export function getRingPosition(landmarks, fingerName = 'ring') {
 
   if (!pip || !dip || !mcp) return null;
 
-  // Ring position is between PIP and DIP (closer to PIP, where real rings sit)
-  const ringX = pip.x * 0.6 + dip.x * 0.4;
-  const ringY = pip.y * 0.6 + dip.y * 0.4;
-  const ringZ = pip.z * 0.6 + dip.z * 0.4;
+  // Ring anchored exactly to landmark 14 (PIP joint of the ring finger)
+  const ringX = pip.x;
+  const ringY = pip.y;
+  const ringZ = pip.z;
 
   // Calculate finger angle for ring rotation
   const dx = dip.x - pip.x;
@@ -112,6 +121,56 @@ export function getRingPosition(landmarks, fingerName = 'ring') {
     pip: { x: pip.x, y: pip.y },
     dip: { x: dip.x, y: dip.y },
   };
+}
+
+/**
+ * Detect if the hand is in a closed fist / palm-closed position.
+ * Returns true when ≥ 3 of the 4 non-thumb fingers are curled.
+ * Uses two independent criteria for robustness across hand orientations:
+ *  1. Fingertip closer to wrist than the MCP joint (folded in).
+ *  2. Raw tip-y > pip-y in normalized screen space (curling downward).
+ */
+export function isHandClosed(landmarks) {
+  if (!landmarks || landmarks.length < 21) return false;
+
+  const fingerChecks = [
+    { tip: 8,  pip: 6,  mcp: 5  }, // index
+    { tip: 12, pip: 10, mcp: 9  }, // middle
+    { tip: 16, pip: 14, mcp: 13 }, // ring
+    { tip: 20, pip: 18, mcp: 17 }, // pinky
+  ];
+
+  const wrist = landmarks[0];
+  let curledCount = 0;
+
+  for (const { tip, pip, mcp } of fingerChecks) {
+    const tipLm = landmarks[tip];
+    const pipLm = landmarks[pip];
+    const mcpLm = landmarks[mcp];
+
+    const tipToWrist = Math.hypot(tipLm.x - wrist.x, tipLm.y - wrist.y);
+    const mcpToWrist = Math.hypot(mcpLm.x - wrist.x, mcpLm.y - wrist.y);
+
+    // Criterion 1: tip folded inward (closer to wrist than MCP)
+    const isFolded = tipToWrist < mcpToWrist * 1.05;
+    // Criterion 2: tip below PIP in screen space
+    const isBelowPip = tipLm.y > pipLm.y + 0.01;
+
+    if (isFolded || isBelowPip) curledCount++;
+  }
+
+  return curledCount >= 3;
+}
+
+/**
+ * Compute per-frame hand velocity as the normalized displacement of the
+ * wrist landmark (index 0) between consecutive landmark sets.
+ */
+export function computeHandVelocity(prevLandmarks, currLandmarks) {
+  if (!prevLandmarks || !currLandmarks) return 0;
+  const p = prevLandmarks[0];
+  const c = currLandmarks[0];
+  return Math.hypot(c.x - p.x, c.y - p.y);
 }
 
 /**

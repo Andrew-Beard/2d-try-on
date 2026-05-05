@@ -12,19 +12,26 @@ const FINGER_OPTIONS = [
 /**
  * Control panel for ring overlay adjustments
  */
-export default function ControlPanel({ controls, onChange, onReset }) {
+export default function ControlPanel({ controls, onChange, onReset, isPalmClosed = false }) {
   const handleChange = (key, value) => {
+    if (isPalmClosed) return; // controls locked while fist is held
     onChange({ ...controls, [key]: value });
   };
 
   return (
-    <div className="control-panel">
+    <div className={`control-panel${isPalmClosed ? ' control-panel-frozen' : ''}`}>
       <div className="control-header">
         <h3>Ring Controls</h3>
-        <button className="reset-btn" onClick={onReset} title="Reset all">
+        <button className="reset-btn" onClick={onReset} title="Reset all" disabled={isPalmClosed}>
           ↺ Reset
         </button>
       </div>
+
+      {isPalmClosed && (
+        <div className="palm-frozen-banner">
+          ✊ Palm closed — controls frozen
+        </div>
+      )}
 
       <div className="control-group">
         <label>Finger</label>
@@ -34,6 +41,7 @@ export default function ControlPanel({ controls, onChange, onReset }) {
               key={f.value}
               className={`finger-btn ${controls.finger === f.value ? 'active' : ''}`}
               onClick={() => handleChange('finger', f.value)}
+              disabled={isPalmClosed}
               title={f.label}
             >
               {f.label}
@@ -52,6 +60,7 @@ export default function ControlPanel({ controls, onChange, onReset }) {
           max="3"
           step="0.05"
           value={controls.scale}
+          disabled={isPalmClosed}
           onChange={(e) => handleChange('scale', parseFloat(e.target.value))}
         />
       </div>
@@ -66,21 +75,38 @@ export default function ControlPanel({ controls, onChange, onReset }) {
           max="180"
           step="1"
           value={controls.rotation}
+          disabled={isPalmClosed}
           onChange={(e) => handleChange('rotation', parseFloat(e.target.value))}
         />
       </div>
 
       <div className="control-group">
         <label>
-          X Offset <span className="value">{controls.offsetX.toFixed(0)}px</span>
+          X Offset · Left Hand <span className="value">{(controls.offsetXLeft ?? 0).toFixed(0)}px</span>
         </label>
         <input
           type="range"
           min="-200"
           max="200"
           step="1"
-          value={controls.offsetX}
-          onChange={(e) => handleChange('offsetX', parseFloat(e.target.value))}
+          value={controls.offsetXLeft ?? 0}
+          disabled={isPalmClosed}
+          onChange={(e) => handleChange('offsetXLeft', parseFloat(e.target.value))}
+        />
+      </div>
+
+      <div className="control-group">
+        <label>
+          X Offset · Right Hand <span className="value">{(controls.offsetXRight ?? 0).toFixed(0)}px</span>
+        </label>
+        <input
+          type="range"
+          min="-200"
+          max="200"
+          step="1"
+          value={controls.offsetXRight ?? 0}
+          disabled={isPalmClosed}
+          onChange={(e) => handleChange('offsetXRight', parseFloat(e.target.value))}
         />
       </div>
 
@@ -94,6 +120,7 @@ export default function ControlPanel({ controls, onChange, onReset }) {
           max="200"
           step="1"
           value={controls.offsetY}
+          disabled={isPalmClosed}
           onChange={(e) => handleChange('offsetY', parseFloat(e.target.value))}
         />
       </div>
@@ -108,6 +135,7 @@ export default function ControlPanel({ controls, onChange, onReset }) {
           max="1"
           step="0.05"
           value={controls.opacity}
+          disabled={isPalmClosed}
           onChange={(e) => handleChange('opacity', parseFloat(e.target.value))}
         />
       </div>

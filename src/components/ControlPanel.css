@@ -131,3 +131,33 @@
   width: 16px;
   height: 16px;
 }
+
+/* Frozen state when palm is closed */
+.control-panel-frozen {
+  pointer-events: none;
+  opacity: 0.7;
+  border-color: #f59e0b;
+  transition: border-color 0.2s, opacity 0.2s;
+}
+
+.control-panel-frozen .control-header h3::after {
+  content: ' 🔒';
+}
+
+.palm-frozen-banner {
+  background: linear-gradient(90deg, #92400e 0%, #b45309 100%);
+  color: #fef3c7;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 7px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+  animation: pulse-banner 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-banner {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}

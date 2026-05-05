@@ -1,12 +1,12 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { createHandLandmarker, detectForVideo, resetHandLandmarker, getRingPosition, drawHandLandmarks } from '../utils/handTracking';
+import { createHandLandmarker, detectForVideo, resetHandLandmarker, getRingPosition, drawHandLandmarks, isHandClosed, computeHandVelocity } from '../utils/handTracking';
 import { drawRingOverlay } from '../utils/ringOverlay';
 import './TryOnCanvas.css';
 
 /**
  * Main try-on canvas - shows webcam feed with ring overlay tracked to finger
  */
-export default function TryOnCanvas({ ringImage, controls }) {
+export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const handsRef = useRef(null);
@@ -14,7 +14,14 @@ export default function TryOnCanvas({ ringImage, controls }) {
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [handDetected, setHandDetected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Click "Start Camera" to begin');
+  const [isPalmClosed, setIsPalmClosed] = useState(false);
   const landmarksRef = useRef(null);
+  // Enhanced tracking state
+  const smoothedLandmarksRef = useRef(null); // EMA-smoothed landmark positions
+  const isPalmClosedRef = useRef(false);      // ref copy for render loop (no stale closure)
+  const frozenRingPosRef = useRef(null);      // last good ring position when palm open
+  const velocityRef = useRef(0);              // wrist velocity for adaptive smoothing
+  const handednessRef = useRef('Right');      // 'Left' | 'Right' — latest detected handedness
 
   // Store controls in a ref so the render loop always reads latest
   const controlsRef = useRef(controls);
@@ -77,12 +84,51 @@ export default function TryOnCanvas({ ringImage, controls }) {
         if (!runningRef.current || !handsRef.current) return;
 
         if (video.readyState >= 2) {
-          const { landmarks } = detectForVideo(handsRef.current, video, performance.now());
+          const { landmarks, handedness } = detectForVideo(handsRef.current, video, performance.now());
           if (landmarks) {
+            // MediaPipe reports from the camera mirror perspective; flip to match mirrored video
+            if (handedness?.[0]?.categoryName) {
+              handednessRef.current = handedness[0].categoryName === 'Left' ? 'Right' : 'Left';
+            }
+            const prev = smoothedLandmarksRef.current;
+
+            // Velocity-adaptive EMA: faster hand → higher alpha (more responsive)
+            const velocity = computeHandVelocity(prev, landmarks);
+            velocityRef.current = velocity;
+            const alpha = Math.min(0.88, 0.28 + velocity * 22);
+
+            const smoothed = prev
+              ? landmarks.map((lm, i) => ({
+                  x: alpha * lm.x + (1 - alpha) * prev[i].x,
+                  y: alpha * lm.y + (1 - alpha) * prev[i].y,
+                  z: alpha * lm.z + (1 - alpha) * prev[i].z,
+                }))
+              : landmarks.slice();
+
+            // Predictive look-ahead: offset by one velocity step to cut tracking lag
+            smoothedLandmarksRef.current = velocity > 0.018 && prev
+              ? smoothed.map((lm, i) => ({
+                  ...lm,
+                  x: Math.max(0, Math.min(1, lm.x + (lm.x - prev[i].x) * 0.38)),
+                  y: Math.max(0, Math.min(1, lm.y + (lm.y - prev[i].y) * 0.38)),
+                }))
+              : smoothed;
+
+            // Palm close detection — use raw (unsmoothed) landmarks for gesture accuracy
+            const closed = isHandClosed(landmarks);
+            isPalmClosedRef.current = closed;
+            setIsPalmClosed(closed);
+            if (onPalmClosed) onPalmClosed(closed);
+
             landmarksRef.current = landmarks;
             setHandDetected(true);
           } else {
             landmarksRef.current = null;
+            smoothedLandmarksRef.current = null;
+            velocityRef.current = 0;
+            isPalmClosedRef.current = false;
+            setIsPalmClosed(false);
+            if (onPalmClosed) onPalmClosed(false);
             setHandDetected(false);
           }
         }
@@ -112,6 +158,11 @@ export default function TryOnCanvas({ ringImage, controls }) {
       resetHandLandmarker();
     }
     landmarksRef.current = null;
+    smoothedLandmarksRef.current = null;
+    frozenRingPosRef.current = null;
+    velocityRef.current = 0;
+    isPalmClosedRef.current = false;
+    setIsPalmClosed(false);
     setIsWebcamActive(false);
     setHandDetected(false);
     setStatusMessage('Camera stopped');
@@ -143,29 +194,39 @@ export default function TryOnCanvas({ ringImage, controls }) {
         ctx.drawImage(video, 0, 0);
         ctx.restore();
 
-        // Draw ring overlay if hand detected
-        if (landmarks && ring) {
-          // Mirror the landmarks since video is mirrored
-          const mirroredLandmarks = landmarks.map(lm => ({
+        // Draw ring overlay using smoothed + predicted landmarks
+        const smoothedLandmarks = smoothedLandmarksRef.current;
+        if (smoothedLandmarks && ring) {
+          const mirroredLandmarks = smoothedLandmarks.map(lm => ({
             ...lm,
             x: 1 - lm.x,
           }));
-          
-          const ringPos = getRingPosition(mirroredLandmarks, ctrl.finger);
-          if (ringPos) {
-            drawRingOverlay(ctx, ring, ringPos, canvas.width, canvas.height, {
+
+          // Update ring position only while palm is open
+          if (!isPalmClosedRef.current) {
+            const ringPos = getRingPosition(mirroredLandmarks, ctrl.finger);
+            if (ringPos) frozenRingPosRef.current = ringPos;
+          }
+
+          // Hide ring entirely when palm is closed
+          const posToRender = isPalmClosedRef.current ? null : frozenRingPosRef.current;
+          if (posToRender) {
+            const offsetX = handednessRef.current === 'Left'
+              ? (ctrl.offsetXLeft ?? 0)
+              : (ctrl.offsetXRight ?? 0);
+            drawRingOverlay(ctx, ring, posToRender, canvas.width, canvas.height, {
               scale: ctrl.scale,
               rotation: ctrl.rotation,
-              offsetX: ctrl.offsetX,
+              offsetX,
               offsetY: ctrl.offsetY,
               opacity: ctrl.opacity,
             });
           }
         }
 
-        // Draw landmarks if enabled
-        if (ctrl.showLandmarks && landmarks) {
-          const mirroredLandmarks = landmarks.map(lm => ({
+        // Draw landmarks if enabled (use smoothed for visual consistency)
+        if (ctrl.showLandmarks && smoothedLandmarks) {
+          const mirroredLandmarks = smoothedLandmarks.map(lm => ({
             ...lm,
             x: 1 - lm.x,
           }));
@@ -211,9 +272,14 @@ export default function TryOnCanvas({ ringImage, controls }) {
           <span className={`status-dot ${isWebcamActive ? (handDetected ? 'detected' : 'active') : 'inactive'}`} />
           <span className="status-text">
             {isWebcamActive 
-              ? (handDetected ? `Hand detected · ${controls.finger} finger` : 'Waiting for hand...')
+              ? (handDetected 
+                  ? `${isPalmClosed ? '✊ Ring frozen' : '✋ Hand detected'} · ${controls.finger} finger`
+                  : 'Waiting for hand...')
               : 'Camera off'}
           </span>
+          {isPalmClosed && isWebcamActive && (
+            <span className="status-frozen">Open hand to adjust</span>
+          )}
           {!ringImage && isWebcamActive && (
             <span className="status-warning">⚠ No ring loaded</span>
           )}

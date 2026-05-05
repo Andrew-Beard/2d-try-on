@@ -20,6 +20,8 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
   const smoothedLandmarksRef = useRef(null); // EMA-smoothed landmark positions
   const isPalmClosedRef = useRef(false);      // ref copy for render loop (no stale closure)
   const frozenRingPosRef = useRef(null);      // last good ring position when palm open
+  const targetRingPosRef = useRef(null);      // latest computed ring pos (detection rate)
+  const displayRingPosRef = useRef(null);     // interpolated ring pos (render rate, 60fps)
   const velocityRef = useRef(0);              // wrist velocity for adaptive smoothing
   const handednessRef = useRef('Right');      // 'Left' | 'Right' — latest detected handedness
 
@@ -78,7 +80,7 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
       setIsWebcamActive(true);
       setStatusMessage('Show your hand to the camera');
 
-      // Start detection loop — synchronous detectForVideo per frame
+      // Start detection loop — runs every animation frame for minimum latency
       runningRef.current = true;
       const detectLoop = () => {
         if (!runningRef.current || !handsRef.current) return;
@@ -92,12 +94,15 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
             }
             const prev = smoothedLandmarksRef.current;
 
-            // Velocity-adaptive EMA: faster hand → higher alpha (more responsive)
+            // Velocity for adaptive alpha — how fast is the wrist moving?
             const velocity = computeHandVelocity(prev, landmarks);
             velocityRef.current = velocity;
-            const alpha = Math.min(0.88, 0.28 + velocity * 22);
 
-            const smoothed = prev
+            // Higher base alpha = less lag. Ramp up smoothly with speed.
+            // 0.6 at rest → 0.92 at fast movement. No predictive look-ahead (causes jumps).
+            const alpha = Math.min(0.92, 0.6 + velocity * 18);
+
+            smoothedLandmarksRef.current = prev
               ? landmarks.map((lm, i) => ({
                   x: alpha * lm.x + (1 - alpha) * prev[i].x,
                   y: alpha * lm.y + (1 - alpha) * prev[i].y,
@@ -105,16 +110,13 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
                 }))
               : landmarks.slice();
 
-            // Predictive look-ahead: offset by one velocity step to cut tracking lag
-            smoothedLandmarksRef.current = velocity > 0.018 && prev
-              ? smoothed.map((lm, i) => ({
-                  ...lm,
-                  x: Math.max(0, Math.min(1, lm.x + (lm.x - prev[i].x) * 0.38)),
-                  y: Math.max(0, Math.min(1, lm.y + (lm.y - prev[i].y) * 0.38)),
-                }))
-              : smoothed;
+            // Compute ring target position from smoothed landmarks
+            const ctrl = controlsRef.current;
+            const mirrored = smoothedLandmarksRef.current.map(lm => ({ ...lm, x: 1 - lm.x }));
+            const ringPos = getRingPosition(mirrored, ctrl.finger);
+            if (ringPos) targetRingPosRef.current = ringPos;
 
-            // Palm close detection — use raw (unsmoothed) landmarks for gesture accuracy
+            // Palm close detection — use raw landmarks for gesture accuracy
             const closed = isHandClosed(landmarks);
             isPalmClosedRef.current = closed;
             setIsPalmClosed(closed);
@@ -125,6 +127,7 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
           } else {
             landmarksRef.current = null;
             smoothedLandmarksRef.current = null;
+            targetRingPosRef.current = null;
             velocityRef.current = 0;
             isPalmClosedRef.current = false;
             setIsPalmClosed(false);
@@ -133,8 +136,7 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
           }
         }
 
-        // ~30 fps detection throttle
-        setTimeout(() => requestAnimationFrame(detectLoop), 33);
+        requestAnimationFrame(detectLoop);
       };
 
       requestAnimationFrame(detectLoop);
@@ -160,6 +162,8 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
     landmarksRef.current = null;
     smoothedLandmarksRef.current = null;
     frozenRingPosRef.current = null;
+    targetRingPosRef.current = null;
+    displayRingPosRef.current = null;
     velocityRef.current = 0;
     isPalmClosedRef.current = false;
     setIsPalmClosed(false);
@@ -194,22 +198,37 @@ export default function TryOnCanvas({ ringImage, controls, onPalmClosed }) {
         ctx.drawImage(video, 0, 0);
         ctx.restore();
 
+        // 60fps render-rate interpolation of ring position toward detection target
+        // This makes the ring glide smoothly even between detection frames
+        const target = targetRingPosRef.current;
+        if (target) {
+          const display = displayRingPosRef.current;
+          if (!display) {
+            displayRingPosRef.current = { ...target };
+          } else {
+            // Lerp speed: 0.35 at rest, ramp up to 0.85 when moving fast
+            const vel = velocityRef.current;
+            const lerpT = Math.min(0.85, 0.35 + vel * 20);
+            displayRingPosRef.current = {
+              ...target,
+              x: display.x + (target.x - display.x) * lerpT,
+              y: display.y + (target.y - display.y) * lerpT,
+              angle: display.angle + (target.angle - display.angle) * lerpT,
+              fingerWidth: display.fingerWidth + (target.fingerWidth - display.fingerWidth) * 0.15,
+            };
+          }
+        }
+
         // Draw ring overlay using smoothed + predicted landmarks
         const smoothedLandmarks = smoothedLandmarksRef.current;
         if (smoothedLandmarks && ring) {
-          const mirroredLandmarks = smoothedLandmarks.map(lm => ({
-            ...lm,
-            x: 1 - lm.x,
-          }));
-
-          // Update ring position only while palm is open
-          if (!isPalmClosedRef.current) {
-            const ringPos = getRingPosition(mirroredLandmarks, ctrl.finger);
-            if (ringPos) frozenRingPosRef.current = ringPos;
+          // Update frozen position when palm is open
+          if (!isPalmClosedRef.current && displayRingPosRef.current) {
+            frozenRingPosRef.current = displayRingPosRef.current;
           }
 
           // Hide ring entirely when palm is closed
-          const posToRender = isPalmClosedRef.current ? null : frozenRingPosRef.current;
+          const posToRender = isPalmClosedRef.current ? null : displayRingPosRef.current;
           if (posToRender) {
             const offsetX = handednessRef.current === 'Left'
               ? (ctrl.offsetXLeft ?? 0)
